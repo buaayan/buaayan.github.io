@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="最近在看皮肤渲染，这篇文章标题范围很大，以为干货很多，实际是一个工程项文章，讲了SSSS方案落地移动端和相关性能优化点。个人感觉最大的优化在于低分辨率的4S集成方案。整理了下译文，有兴趣的同学推荐阅读原文：Realistic Real-Time Skin Rendering on Mobile。 名词解释 subsurface scattering 次表面散射 surface reflectanc">
+<meta property="og:type" content="article">
+<meta property="og:title" content="移动端真实感皮肤渲染（译）-GPU PRO 5">
+<meta property="og:url" content="http://example.com/2024/09/02/skin-rendering-on-mobile/index.html">
+<meta property="og:site_name" content="Against the light">
+<meta property="og:description" content="最近在看皮肤渲染，这篇文章标题范围很大，以为干货很多，实际是一个工程项文章，讲了SSSS方案落地移动端和相关性能优化点。个人感觉最大的优化在于低分辨率的4S集成方案。整理了下译文，有兴趣的同学推荐阅读原文：Realistic Real-Time Skin Rendering on Mobile。 名词解释 subsurface scattering 次表面散射 surface reflectanc">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://example.com/2024/09/02/skin-rendering-on-mobile/skin-1.png">
+<meta property="og:image" content="http://example.com/2024/09/02/skin-rendering-on-mobile/skin-2.png">
+<meta property="og:image" content="http://example.com/2024/09/02/skin-rendering-on-mobile/skin-3.png">
+<meta property="og:image" content="http://example.com/2024/09/02/skin-rendering-on-mobile/skin-4.png">
+<meta property="article:published_time" content="2024-09-02T08:52:46.000Z">
+<meta property="article:modified_time" content="2024-09-02T09:21:08.780Z">
+<meta property="article:author" content="Yan Zhang">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2024/09/02/skin-rendering-on-mobile/skin-1.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/favicon.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/favicon-192x192.png" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+        
+      
+    
+    <!-- title -->
+    <title>移动端真实感皮肤渲染（译）-GPU PRO 5</title>
+    <!-- async scripts -->
+    <!-- Google Analytics -->
+
+
+    <!-- Umami Analytics -->
+
+
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 7.3.0"></head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="Menu"><i class="fa-solid fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="Menu"><i class="fa-solid fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="Top" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fa-solid fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">Home</a></li><!--
+     --><!--
+       --><li><a href="/about/">About</a></li><!--
+     --><!--
+       --><li><a href="/archives/">Writing</a></li><!--
+     --><!--
+       --><li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="Previous post" href="/2024/09/02/oit/"><i class="fa-solid fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="Back to top" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa-solid fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="Share post" href="#"><i class="fa-solid fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://example.com/2024/09/02/skin-rendering-on-mobile/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&text=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&is_video=false&description=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=移动端真实感皮肤渲染（译）-GPU PRO 5&body=Check out this article: http://example.com/2024/09/02/skin-rendering-on-mobile/"><i class="fa-solid fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&name=移动端真实感皮肤渲染（译）-GPU PRO 5&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://example.com/2024/09/02/skin-rendering-on-mobile/&t=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    
+    
+      <div id="toc">
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8D%E8%AF%8D%E8%A7%A3%E9%87%8A"><span class="toc-number">1.</span> <span class="toc-text">名词解释</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Overview"><span class="toc-number">2.</span> <span class="toc-text">1. Overview</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E7%9A%AE%E8%82%A4%E8%A1%A8%E9%9D%A2%E5%8F%8D%E5%B0%84%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.1.</span> <span class="toc-text">1.1 皮肤表面反射模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E7%9A%AE%E8%82%A4%E6%AC%A1%E8%A1%A8%E9%9D%A2%E6%95%A3%E5%B0%84%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.2.</span> <span class="toc-text">1.2 皮肤次表面散射模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-3-%E7%BA%BF%E6%80%A7%E5%85%89%E7%85%A7%E7%9A%84%E9%87%8D%E8%A6%81%E6%80%A7"><span class="toc-number">2.3.</span> <span class="toc-text">1.3 线性光照的重要性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E7%A7%BB%E5%8A%A8%E7%AB%AFGPU%E7%9A%84%E6%80%A7%E8%83%BD"><span class="toc-number">3.</span> <span class="toc-text">2. 移动端GPU的性能</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E7%9A%AE%E8%82%A4%E6%AC%A1%E8%A1%A8%E9%9D%A2%E6%95%A3%E5%B0%84"><span class="toc-number">3.1.</span> <span class="toc-text">2.1 皮肤次表面散射</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-PBR"><span class="toc-number">3.2.</span> <span class="toc-text">2.2 PBR</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-%E9%80%90%E5%83%8F%E7%B4%A0%E7%8E%AF%E5%A2%83%E5%8F%8D%E5%B0%84"><span class="toc-number">3.3.</span> <span class="toc-text">2.3 逐像素环境反射</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-%E7%BA%BF%E6%80%A7%E5%85%89%E7%85%A7"><span class="toc-number">3.4.</span> <span class="toc-text">2.4 线性光照</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E5%AE%9E%E7%8E%B0"><span class="toc-number">4.</span> <span class="toc-text">3 实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%B1%8F%E5%B9%95%E7%A9%BA%E9%97%B4%E5%85%89%E7%85%A7%E7%A7%AF%E5%88%86buffer"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 屏幕空间光照积分buffer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E6%AC%A1%E8%A1%A8%E9%9D%A2%E6%95%A3%E5%B0%84%EF%BC%88%E5%B1%8F%E5%B9%95%E7%A9%BA%E9%97%B4%E6%BC%AB%E5%8F%8D%E5%B0%84%EF%BC%89"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 次表面散射（屏幕空间漫反射）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E5%A4%9A%E5%B1%82%E7%9A%AE%E8%82%A4"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 多层皮肤</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E5%BA%94%E7%94%A8PBR"><span class="toc-number">4.4.</span> <span class="toc-text">3.4 应用PBR</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-5-GPU%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1"><span class="toc-number">4.5.</span> <span class="toc-text">3.5 GPU负载均衡</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-6-%E5%8F%A6%E7%B1%BBBRDF%E5%9B%A0%E5%AD%90"><span class="toc-number">4.6.</span> <span class="toc-text">3.6 另类BRDF因子</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-7-%E5%8F%AF%E9%80%89%E4%BC%BD%E9%A9%AC%E7%9F%AB%E6%AD%A3"><span class="toc-number">4.7.</span> <span class="toc-text">3.7 可选伽马矫正</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-8-%E7%9C%BC%E7%9D%9B%E7%9A%84%E6%95%A3%E5%B0%84"><span class="toc-number">4.8.</span> <span class="toc-text">3.8 眼睛的散射</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-9-%E7%9A%AE%E8%82%A4%E7%BB%86%E8%8A%82%E7%9A%84%E7%AD%89%E7%BA%A7"><span class="toc-number">4.9.</span> <span class="toc-text">3.9 皮肤细节的等级</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E7%BB%93%E6%9E%9C"><span class="toc-number">5.</span> <span class="toc-text">4 结果</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E9%97%AE%E9%A2%98%E5%92%8C%E9%99%90%E5%88%B6"><span class="toc-number">5.1.</span> <span class="toc-text">4.1 问题和限制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E5%AF%B9%E6%AF%94"><span class="toc-number">5.2.</span> <span class="toc-text">4.2 对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-Shader"><span class="toc-number">5.3.</span> <span class="toc-text">4.3 Shader</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E6%80%BB%E7%BB%93"><span class="toc-number">6.</span> <span class="toc-text">5 总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><span class="toc-number">7.</span> <span class="toc-text">参考文献</span></a></li></ol>
+      </div>
+    
+  </span>
+</div>
+
+    
+    <div class="content index py4 ">
+        
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle p-name" itemprop="name headline">
+        移动端真实感皮肤渲染（译）-GPU PRO 5
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author p-author h-card" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span class="p-name" itemprop="name">Yan Zhang</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-09-02T08:52:46.000Z" class="dt-published" itemprop="datePublished">2024-09-02</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content e-content" itemprop="articleBody">
+    <p>最近在看皮肤渲染，这篇文章标题范围很大，以为干货很多，实际是一个工程项文章，讲了SSSS方案落地移动端和相关性能优化点。个人感觉最大的优化在于低分辨率的4S集成方案。<br>整理了下译文，有兴趣的同学推荐阅读原文：Realistic Real-Time Skin Rendering on Mobile。</p>
+<h2 id="名词解释"><a href="#名词解释" class="headerlink" title="名词解释"></a>名词解释</h2><ol>
+<li>subsurface scattering 次表面散射</li>
+<li>surface reflectance 表面反射</li>
+<li>dielectric 电介质</li>
+<li>ALU 算数逻辑单元</li>
+<li>blur 模糊</li>
+<li>irradiance 辐照度</li>
+</ol>
+<h2 id="1-Overview"><a href="#1-Overview" class="headerlink" title="1. Overview"></a>1. Overview</h2><p>皮肤渲染的挑战：a) 次表面散射 b) 表面反射，相比于塑料、木头等材质更加复杂。对于很多均匀材质，我们可以近似次表面散射为diffuse计算，近似表面反射到高光计算，类似Blinn-Phong。</p>
+<p>然而皮肤包含多层半透明组织，拥有不同的光照散射、反射特性，为了达到实时渲染的目的，我们必须找到高效的多层组织仿真算法那。</p>
+<h3 id="1-1-皮肤表面反射模型"><a href="#1-1-皮肤表面反射模型" class="headerlink" title="1.1 皮肤表面反射模型"></a>1.1 皮肤表面反射模型</h3><p>当光到达皮肤表面，很少一部分从最外层油脂层反射除去。最外层油脂和组织细胞是电介质材质，反射光照颜色，不进行着色，可以件欧美为高国光反射方程。<br>绝大部分光进入皮肤，在内部吸收、散射、反射，其中很大比例通过反射再次离开皮肤。在[Donner and Jensen 05]一文中提到单高光层不足以描述这个复杂过程。本文的实现中，听从[d’Eon and Luebke 07]一文中的建议，采用两层分离的高光反射层。</p>
+<p>从经验观察中我们得知：对于我们感知皮肤，表面反射非常重要。使用Blinn-Phong模型虽然简单，但是并不足够。为了更加物理上准确，我们采用基于微表面模型的光照模型。</p>
+<p>我们使用a) Beckmann微表面分布函数; b) 几何项的粗劣近似 c) 牺牲Fresnel项的精确度，替换其中的像素法线、使用半角向量。整体来看这个模型，比较像Cook-Torrance的简化版本[Kelemen and Szirmay-Kalos 01]。</p>
+<h3 id="1-2-皮肤次表面散射模型"><a href="#1-2-皮肤次表面散射模型" class="headerlink" title="1.2 皮肤次表面散射模型"></a>1.2 皮肤次表面散射模型</h3><p>在皮肤表层下面，光照很快变成漫反射因为散射和部分被组织吸收。由于皮肤是多层吸收率不同的组织组成，使得事情更加复杂。试图真正分析这一过程的方法都不再可行。</p>
+<p>取代使用这种方式，入射光可以捕捉并储存在专用buffer中进行模糊，纹理空间进行多次高斯模糊[Borshukov and Lewis 03] [d’Eon and Luebke 07]，在移动端GPU是无法被接受的，由于带宽、内存的限制。</p>
+<p>另一方面，入射光可以再屏幕空间buffer进行捕捉和模糊[Jimenez et al. 09]，这一方案对移动端GPU友好很多。</p>
+<h3 id="1-3-线性光照的重要性"><a href="#1-3-线性光照的重要性" class="headerlink" title="1.3 线性光照的重要性"></a>1.3 线性光照的重要性</h3><p>准确的皮肤着色依赖伽马矫正，如果出错会有一种典型的淡黄色效果[d’Eon and Luebke 07]。因为颜色贴图是在sRGB空间制作，我们需要在线性空间下计算光照方程，并且再返回sRGB空间进行展示。</p>
+<h2 id="2-移动端GPU的性能"><a href="#2-移动端GPU的性能" class="headerlink" title="2. 移动端GPU的性能"></a>2. 移动端GPU的性能</h2><p>尽管移动端GPU发展速度快，仍然和台式机相差甚远，我们看下几个重要方法在移动端的可行性：</p>
+<h3 id="2-1-皮肤次表面散射"><a href="#2-1-皮肤次表面散射" class="headerlink" title="2.1 皮肤次表面散射"></a>2.1 皮肤次表面散射</h3><p>尽管屏幕空间模糊需要额外的渲染pass，整体开销在我们的demo占据GPU负载的5%-10%，不同尺度小效果也很好。同时可以适当减少屏幕空间buffer大小。</p>
+<h3 id="2-2-PBR"><a href="#2-2-PBR" class="headerlink" title="2.2 PBR"></a>2.2 PBR</h3><p>即使是最简单的能量守恒版本的Blinn-Phong高光层对于移动端GPU都是很昂贵的，每个像素需要太多的ALU操作,我们使用预计算BRDF 2D纹理的方案。最终皮肤像素的着色占据所有GPU负载的50%，侧面印证这里算法优化的必要性。</p>
+<h3 id="2-3-逐像素环境反射"><a href="#2-3-逐像素环境反射" class="headerlink" title="2.3 逐像素环境反射"></a>2.3 逐像素环境反射</h3><p>为了考虑环境反射，需要从normal map中采样法线并从tangent坐标系转换到世界坐标系，对于每个像素需要额外的点积操作。我们使用顶点法线代替，略微牺牲一些效果。因为模型本身三角形密集，因此导致的精度损失非常小。</p>
+<h3 id="2-4-线性光照"><a href="#2-4-线性光照" class="headerlink" title="2.4 线性光照"></a>2.4 线性光照</h3><p>尽管sRGB纹理读取对于移动端GPU不重要，在GLES 2.0中只能通过平台特定扩展支持。即使在3.0中，伽马矫正已经是核心API一部分，纹理读取对于不同系列的GPU开销仍然不同。</p>
+<p>然而，我们可以只在需要的地方使用伽马矫正，比如皮肤的像素部分，屏幕其他区域可以不进行伽马矫正。</p>
+<p>我们期望这种优化在未来不再必要，当GLES3.0克服不同GPU的开销变得相似时。</p>
+<h2 id="3-实现"><a href="#3-实现" class="headerlink" title="3 实现"></a>3 实现</h2><h3 id="3-1-屏幕空间光照积分buffer"><a href="#3-1-屏幕空间光照积分buffer" class="headerlink" title="3.1 屏幕空间光照积分buffer"></a>3.1 屏幕空间光照积分buffer</h3><p>我们解决次表面散射的方式：使用临时的低分辨率屏幕空间buffer积分入射光照（漫反射和环境），默认我们使用屏幕分辨率的1/4作为光照积分buffer。</p>
+<p><img src="skin-1.png" alt=""></p>
+<p>我们首先渲染所有的皮肤渲染角色，在buffer中遍历所有入射光和排序结果。需要说明我们想要储存命中表面的光照，在这一步忽视皮肤本身颜色。用alpha数值标记覆盖的像素，用来和背景进行区分。</p>
+<p>在渲染光照积分buffer时，我们适当沿图形法线方向延长一些偏移，用来弥补低分辨率的边缘效果损失。</p>
+<h3 id="3-2-次表面散射（屏幕空间漫反射）"><a href="#3-2-次表面散射（屏幕空间漫反射）" class="headerlink" title="3.2 次表面散射（屏幕空间漫反射）"></a>3.2 次表面散射（屏幕空间漫反射）</h3><p>第二步，我们使用可分离高斯模糊用来仿真皮肤组织下的散射，使用第一步中的alpha数值用来区分皮肤从而避免漏光。我们发现：使用一次模糊足够达到视觉上满意的效果，多次模糊会提升最终成像质量。</p>
+<p>模糊的光照积分buffer会在皮肤着色的最后步骤中进行采样，用来恢复光照影响像素的漫反射部分。</p>
+<p>实践上，很少有情况皮肤覆盖很大的屏幕区域，根据这一点，我们生成几何包围盒只在内部进行模糊。节省了带宽，尤其是角色离镜头很远的时候。</p>
+<h3 id="3-3-多层皮肤"><a href="#3-3-多层皮肤" class="headerlink" title="3.3 多层皮肤"></a>3.3 多层皮肤</h3><p>很多离线和在线渲染引擎将皮肤建模为三层材质模型：油脂层、表皮层、真皮层，各自使用不同的散射和吸收参数。处于性能考虑本文只使用两层模型，事实上对于设计师来讲是假的三层模型，通过转换参数应用在两层模型中。层级混合会在皮肤着色的最后一步完成。</p>
+<p><img src="skin-2.png" alt=""></p>
+<h3 id="3-4-应用PBR"><a href="#3-4-应用PBR" class="headerlink" title="3.4 应用PBR"></a>3.4 应用PBR</h3><p>如前文讨论，对于高光项本文使用基于物理的微表面分步建模。为了达到实时目标，预积分了一张2D查找纹理，承载BRDF中主要计算部分。</p>
+<p>在像素着色器中，我们使用法线和半角向量夹角（NH）作为一个坐标轴，法线和视点方向夹角（NV）作为另一个坐标轴，我们可以在mip map链中储存roughness参数变化。</p>
+<p>我们使用预计算中4个通道来储存不同信息：</p>
+<ol>
+<li>前两个通道储存NH和NV对于两个高光层的响应</li>
+<li>第三个通道储存预积分的对于不同NV变化的Fresnel项</li>
+<li>最后一个通道储存漫反射分量的能量守恒项，光进入次表面层前的反射光积分<br>因为本文使用预计算查找纹理，对于第二层高光基本可以忽略不计。并且，通过近似0开销达到了能量守恒。</li>
+</ol>
+<h3 id="3-5-GPU负载均衡"><a href="#3-5-GPU负载均衡" class="headerlink" title="3.5 GPU负载均衡"></a>3.5 GPU负载均衡</h3><p>找到一个合适的查找纹理大小对于优化很重要，本文使用32x128分辨率。</p>
+<h3 id="3-6-另类BRDF因子"><a href="#3-6-另类BRDF因子" class="headerlink" title="3.6 另类BRDF因子"></a>3.6 另类BRDF因子</h3><p>当使用预计算查找纹理时，有一些其他可能的BRDF因子方案。一种是使用NH和VL-储存Cook-Torrance不同的近似值。</p>
+<h3 id="3-7-可选伽马矫正"><a href="#3-7-可选伽马矫正" class="headerlink" title="3.7 可选伽马矫正"></a>3.7 可选伽马矫正</h3><p>如前文讨论，现象光照非常重要并且需要伽马和逆伽马矫正，本文采用如下方案加速这一过程。首先伽马因子使用2.0，数据额计算变为开放和次方，比2.2/2.4计算要快很多。非全局伽马矫正，只在需要的像素上进行矫正。</p>
+<h3 id="3-8-眼睛的散射"><a href="#3-8-眼睛的散射" class="headerlink" title="3.8 眼睛的散射"></a>3.8 眼睛的散射</h3><p>眼睛本身就是一个渲染挑战，本文使用的解决方案是忽略模拟眼睛内部的次表面散射，眼睛部分不参与光照积分buffer，很多问题被眼睛的高反射率隐藏。闭上眼睛时，本文添加一个很小量的偏移来体现眼线折射。</p>
+<p><img src="skin-3.png" alt=""></p>
+<h3 id="3-9-皮肤细节的等级"><a href="#3-9-皮肤细节的等级" class="headerlink" title="3.9 皮肤细节的等级"></a>3.9 皮肤细节的等级</h3><p>为了避免在特定距离下蜡状和看起来非常平的皮肤效果，散射核的尺寸需要根据视点距离降低。然而在小尺寸积分buffer上使用小尺寸的模糊核会看起来非常低分辨率。因此，除了根据距离减小模糊效果外，本文同样使用更加简单的单pass皮肤shader。简单版shader使用非常粗糙的次表面散射近似：忽略逐像素法线的高频部分（[Penner and Borshukov 11]中的bent normal），但是仍然保持表面反射部分。作为一个额外有点，远端皮肤渲染性能开销更低。</p>
+<h2 id="4-结果"><a href="#4-结果" class="headerlink" title="4 结果"></a>4 结果</h2><h3 id="4-1-问题和限制"><a href="#4-1-问题和限制" class="headerlink" title="4.1 问题和限制"></a>4.1 问题和限制</h3><p>处于性能原因，目前的皮肤渲染方法局限于单个逐像素光照。其他光照使用逐顶点方式。</p>
+<p>一个相对高开销的方面：皮肤geometry需要被渲染两遍，一遍是在光照积分buffer，一遍是在framebuffer中。第一遍中使用开销很低的shader并且仅包含数量不多的像素。</p>
+<p>由于屏幕空间模糊方案的限制，后向散射的问题难以建模（比如耳朵在红光前闪烁），可以通过预计算厚度图在积分buffer中应用来近似模拟后向散射。</p>
+<h3 id="4-2-对比"><a href="#4-2-对比" class="headerlink" title="4.2 对比"></a>4.2 对比</h3><p>[Penner and Borshukov 11]中的预积分方案可以再移动端皮肤渲染中应用，然而在移动端GPU上采样预BRDF积分曲率依然很昂贵。</p>
+<h3 id="4-3-Shader"><a href="#4-3-Shader" class="headerlink" title="4.3 Shader"></a>4.3 Shader</h3><p>我们最终的shader包含4个独立的纹理读取（图1.4）：</p>
+<p><img src="skin-4.png" alt=""></p>
+<ol>
+<li>albedo和反射率贴图</li>
+<li>法线贴图</li>
+<li>环境反射cube贴图</li>
+<li>模糊的辐照度贴图</li>
+</ol>
+<p>还有在预计算BRDF查找纹理中有一个独立的纹理读取，整个shader包含40个向量操作，在当前移动端GPU上表现良好。</p>
+<h2 id="5-总结"><a href="#5-总结" class="headerlink" title="5 总结"></a>5 总结</h2><p>demo中每帧包含60000个动画几何图形使用皮肤着色，基本覆盖屏幕主要区域。在iPad4上全屏分辨率（2048x1536）上达到平滑30fps，在很多其他现代移动设备上达到了相似性能表现。</p>
+<h2 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h2><p> [Borshukov and Lewis 03] George Borshukov and J. P. Lewis. “Realistic Human Face Rendering for The Matrix Reloaded.” In ACM SIGGRAPH 2003 Sketches &amp; Applications, SIGGRAPH ’03, p. Article no. 1. New York: ACM, 2003.</p>
+<p> [d’Eon and Luebke 07] Eugene d’Eon and David Luebke. “Advanced Techniques for Realistic Real-Time Skin Rendering.” In GPU Gems 3, edited by Hubert Nguyen, pp. 293–347. Upper Saddle River, NJ: Addison-Wesley, 2007.</p>
+<p> [Donner and Jensen 05] Craig Donner and HenrikWann Jensen. “Light Diffusion in Multi-layered Translucent Materials.” ACM Transactions on Graphics 24:3 (2005), 1032–1039.</p>
+<p> [Jimenez et al. 09] Jorge Jimenez, Veronica Sundstedt, and Diego Gutierrez. “Screen-Space Perceptual Rendering of Human Skin.” ACM Transactions on Applied Perception 6:4 (2009), 23:1–23:15.</p>
+<p> [Jimenez 12] Jorge Jimenez. “Practical Real-Time Strategies for Photorealistic Skin Rendering and Antialiasing.” Ph.D. thesis, Universidad de Zaragoza, Zaragoza, Spain, 2012. Available online (<a target="_blank" rel="noopener" href="http://diglib.eg.org/EG/DL/dissonline/doc/jimenez.pdf">http://diglib.eg.org/EG/DL/dissonline/doc/jimenez.pdf</a>).</p>
+<p> [Kelemen and Szirmay-Kalos 01] Csaba Kelemen and L´aszl´o Szirmay-Kalos. “A Microfacet Based Coupled Specular-Matte BRDF Model with Importance Sampling.” In Proceedings Eurographics ’01, pp. 25–34. Aire-la-Ville, Switzerland: Eurogrpahics Association, 2001.</p>
+<p> [Penner and Borshukov 11] Eric Penner and George Borshukov. “Pre-Integrated Skin Shading.” In GPU Pro 2, edited by Wolfgang Engel, pp. 41–55. Natick, MA: A K Peters, Ltd., 2011.</p>
+<p> [Pharr and Humphreys 04] Matt Pharr and Greg Humphreys. Physically Based Rendering: From Theory to Implementation. San Francisco: Morgan Kaufmann, 2004.</p>
+<p> [Sch¨uler 11] Christian Sch¨uler. “The Blinn-Phong Normalization Zoo.” www.thetenthplanet.de/archives/255, 2011.</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+        
+          <li><a href="/">Home</a></li>
+        
+          <li><a href="/about/">About</a></li>
+        
+          <li><a href="/archives/">Writing</a></li>
+        
+          <li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li>
+        
+      </ul>
+    </div>
+
+    
+    
+      <div id="toc-footer" style="display: none">
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8D%E8%AF%8D%E8%A7%A3%E9%87%8A"><span class="toc-number">1.</span> <span class="toc-text">名词解释</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Overview"><span class="toc-number">2.</span> <span class="toc-text">1. Overview</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E7%9A%AE%E8%82%A4%E8%A1%A8%E9%9D%A2%E5%8F%8D%E5%B0%84%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.1.</span> <span class="toc-text">1.1 皮肤表面反射模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E7%9A%AE%E8%82%A4%E6%AC%A1%E8%A1%A8%E9%9D%A2%E6%95%A3%E5%B0%84%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.2.</span> <span class="toc-text">1.2 皮肤次表面散射模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-3-%E7%BA%BF%E6%80%A7%E5%85%89%E7%85%A7%E7%9A%84%E9%87%8D%E8%A6%81%E6%80%A7"><span class="toc-number">2.3.</span> <span class="toc-text">1.3 线性光照的重要性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E7%A7%BB%E5%8A%A8%E7%AB%AFGPU%E7%9A%84%E6%80%A7%E8%83%BD"><span class="toc-number">3.</span> <span class="toc-text">2. 移动端GPU的性能</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E7%9A%AE%E8%82%A4%E6%AC%A1%E8%A1%A8%E9%9D%A2%E6%95%A3%E5%B0%84"><span class="toc-number">3.1.</span> <span class="toc-text">2.1 皮肤次表面散射</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-PBR"><span class="toc-number">3.2.</span> <span class="toc-text">2.2 PBR</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-%E9%80%90%E5%83%8F%E7%B4%A0%E7%8E%AF%E5%A2%83%E5%8F%8D%E5%B0%84"><span class="toc-number">3.3.</span> <span class="toc-text">2.3 逐像素环境反射</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-%E7%BA%BF%E6%80%A7%E5%85%89%E7%85%A7"><span class="toc-number">3.4.</span> <span class="toc-text">2.4 线性光照</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E5%AE%9E%E7%8E%B0"><span class="toc-number">4.</span> <span class="toc-text">3 实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%B1%8F%E5%B9%95%E7%A9%BA%E9%97%B4%E5%85%89%E7%85%A7%E7%A7%AF%E5%88%86buffer"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 屏幕空间光照积分buffer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E6%AC%A1%E8%A1%A8%E9%9D%A2%E6%95%A3%E5%B0%84%EF%BC%88%E5%B1%8F%E5%B9%95%E7%A9%BA%E9%97%B4%E6%BC%AB%E5%8F%8D%E5%B0%84%EF%BC%89"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 次表面散射（屏幕空间漫反射）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E5%A4%9A%E5%B1%82%E7%9A%AE%E8%82%A4"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 多层皮肤</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E5%BA%94%E7%94%A8PBR"><span class="toc-number">4.4.</span> <span class="toc-text">3.4 应用PBR</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-5-GPU%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1"><span class="toc-number">4.5.</span> <span class="toc-text">3.5 GPU负载均衡</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-6-%E5%8F%A6%E7%B1%BBBRDF%E5%9B%A0%E5%AD%90"><span class="toc-number">4.6.</span> <span class="toc-text">3.6 另类BRDF因子</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-7-%E5%8F%AF%E9%80%89%E4%BC%BD%E9%A9%AC%E7%9F%AB%E6%AD%A3"><span class="toc-number">4.7.</span> <span class="toc-text">3.7 可选伽马矫正</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-8-%E7%9C%BC%E7%9D%9B%E7%9A%84%E6%95%A3%E5%B0%84"><span class="toc-number">4.8.</span> <span class="toc-text">3.8 眼睛的散射</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-9-%E7%9A%AE%E8%82%A4%E7%BB%86%E8%8A%82%E7%9A%84%E7%AD%89%E7%BA%A7"><span class="toc-number">4.9.</span> <span class="toc-text">3.9 皮肤细节的等级</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E7%BB%93%E6%9E%9C"><span class="toc-number">5.</span> <span class="toc-text">4 结果</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E9%97%AE%E9%A2%98%E5%92%8C%E9%99%90%E5%88%B6"><span class="toc-number">5.1.</span> <span class="toc-text">4.1 问题和限制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E5%AF%B9%E6%AF%94"><span class="toc-number">5.2.</span> <span class="toc-text">4.2 对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-Shader"><span class="toc-number">5.3.</span> <span class="toc-text">4.3 Shader</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E6%80%BB%E7%BB%93"><span class="toc-number">6.</span> <span class="toc-text">5 总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><span class="toc-number">7.</span> <span class="toc-text">参考文献</span></a></li></ol>
+      </div>
+    
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://example.com/2024/09/02/skin-rendering-on-mobile/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&text=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&is_video=false&description=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=移动端真实感皮肤渲染（译）-GPU PRO 5&body=Check out this article: http://example.com/2024/09/02/skin-rendering-on-mobile/"><i class="fa-solid fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&title=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://example.com/2024/09/02/skin-rendering-on-mobile/&name=移动端真实感皮肤渲染（译）-GPU PRO 5&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://example.com/2024/09/02/skin-rendering-on-mobile/&t=移动端真实感皮肤渲染（译）-GPU PRO 5"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fa-solid fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        
+          <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fa-solid fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fa-solid fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa-solid fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2016-2024
+    Yan Zhang
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">Home</a></li><!--
+     --><!--
+       --><li><a href="/about/">About</a></li><!--
+     --><!--
+       --><li><a href="/archives/">Writing</a></li><!--
+     --><!--
+       --><li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script>
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script>
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="fa-regular fa-clone"></i>';
+    btn += '</span>';
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+</body>
+</html>

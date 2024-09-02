@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="本文主要介绍了半透明渲染的背景和方法演进历史，并详细介绍Weighted Blended Order-Independent Transparency一文中的方法，感兴趣的同学还是非常建议通读原文。https:&#x2F;&#x2F;jcgt.org&#x2F;published&#x2F;0002&#x2F;02&#x2F;09&#x2F; 背景半透明&#x2F;部分覆盖（part coverage）在渲染场景非常常见，比如玻璃、火焰、烟雾等，渲染中对于半透明的计算方法是非">
+<meta property="og:type" content="article">
+<meta property="og:title" content="半透明顺序无关渲染-OIT">
+<meta property="og:url" content="http://example.com/2024/09/02/oit/index.html">
+<meta property="og:site_name" content="Against the light">
+<meta property="og:description" content="本文主要介绍了半透明渲染的背景和方法演进历史，并详细介绍Weighted Blended Order-Independent Transparency一文中的方法，感兴趣的同学还是非常建议通读原文。https:&#x2F;&#x2F;jcgt.org&#x2F;published&#x2F;0002&#x2F;02&#x2F;09&#x2F; 背景半透明&#x2F;部分覆盖（part coverage）在渲染场景非常常见，比如玻璃、火焰、烟雾等，渲染中对于半透明的计算方法是非">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-1.gif">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-2.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-3.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-4.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-5.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-6.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-7.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-8.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-9.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-10.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-11.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-12.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-13.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-14.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-15.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-16.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-17.png">
+<meta property="og:image" content="http://example.com/2024/09/02/oit/oit-18.gif">
+<meta property="article:published_time" content="2024-09-02T08:55:46.000Z">
+<meta property="article:modified_time" content="2024-09-02T09:01:38.090Z">
+<meta property="article:author" content="Yan Zhang">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2024/09/02/oit/oit-1.gif">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/favicon.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/favicon-192x192.png" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+        
+      
+    
+    <!-- title -->
+    <title>半透明顺序无关渲染-OIT</title>
+    <!-- async scripts -->
+    <!-- Google Analytics -->
+
+
+    <!-- Umami Analytics -->
+
+
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 7.3.0"></head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="Menu"><i class="fa-solid fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="Menu"><i class="fa-solid fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="Top" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fa-solid fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">Home</a></li><!--
+     --><!--
+       --><li><a href="/about/">About</a></li><!--
+     --><!--
+       --><li><a href="/archives/">Writing</a></li><!--
+     --><!--
+       --><li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="Next post" href="/2024/09/02/skin-rendering-on-mobile/"><i class="fa-solid fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="Back to top" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa-solid fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="Share post" href="#"><i class="fa-solid fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://example.com/2024/09/02/oit/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://example.com/2024/09/02/oit/&text=半透明顺序无关渲染-OIT"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://example.com/2024/09/02/oit/&is_video=false&description=半透明顺序无关渲染-OIT"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=半透明顺序无关渲染-OIT&body=Check out this article: http://example.com/2024/09/02/oit/"><i class="fa-solid fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://example.com/2024/09/02/oit/&name=半透明顺序无关渲染-OIT&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://example.com/2024/09/02/oit/&t=半透明顺序无关渲染-OIT"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    
+    
+      <div id="toc">
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%83%8C%E6%99%AF"><span class="toc-number">1.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%8A%E9%80%8F%E6%98%8E%E6%97%A0%E5%BA%8F%E6%B8%B2%E6%9F%93Order-Independent-Transparency"><span class="toc-number">2.</span> <span class="toc-text">半透明无序渲染Order-Independent Transparency</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A1%BA%E5%BA%8F%E5%8C%96"><span class="toc-number">2.1.</span> <span class="toc-text">顺序化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Blended-OIT"><span class="toc-number">2.2.</span> <span class="toc-text">Blended OIT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Blended-OIT%E9%99%90%E5%88%B6"><span class="toc-number">2.3.</span> <span class="toc-text">Blended OIT限制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Blended-OIT%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.4.</span> <span class="toc-text">Blended OIT实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Demo"><span class="toc-number">2.5.</span> <span class="toc-text">Demo</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">3.</span> <span class="toc-text">总结</span></a></li></ol>
+      </div>
+    
+  </span>
+</div>
+
+    
+    <div class="content index py4 ">
+        
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle p-name" itemprop="name headline">
+        半透明顺序无关渲染-OIT
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author p-author h-card" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span class="p-name" itemprop="name">Yan Zhang</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-09-02T08:55:46.000Z" class="dt-published" itemprop="datePublished">2024-09-02</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content e-content" itemprop="articleBody">
+    <p>本文主要介绍了半透明渲染的背景和方法演进历史，并详细介绍Weighted Blended Order-Independent Transparency一文中的方法，感兴趣的同学还是非常建议通读原文。<a target="_blank" rel="noopener" href="https://jcgt.org/published/0002/02/09/">https://jcgt.org/published/0002/02/09/</a></p>
+<h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>半透明/部分覆盖（part coverage）在渲染场景非常常见，比如玻璃、火焰、烟雾等，渲染中对于半透明的计算方法是非常经典的OVER操作。</p>
+<p><img src="oit-1.gif" alt=""></p>
+<p>OVER操作数学上通过两个变量来进行建模：透明度 $\alpha$ 和颜色 $C$，$\alpha = 1$ 代表完全覆盖住背景，$\alpha = 0.5$ 表示覆盖一半背景区域。引入非预乘颜色 $U=\alpha C$ ，对于背景颜色 $C_0$ 被颜色 $C_1$ 的表面部分覆盖，最终颜色为 $C_f$ ，根据OVER操作：</p>
+<p><img src="oit-2.png" alt=""></p>
+<p>多个层级操作需要从后向前顺序混合，递归地应用数据：</p>
+<p><img src="oit-3.png" alt=""></p>
+<p>需要注意的是<strong>OVER操作不符合交换律</strong>，需要按照顺序进行计算。</p>
+<h2 id="半透明无序渲染Order-Independent-Transparency"><a href="#半透明无序渲染Order-Independent-Transparency" class="headerlink" title="半透明无序渲染Order-Independent Transparency"></a>半透明无序渲染Order-Independent Transparency</h2><p>第一个思路就是利用CPU进行排序，按顺序进行渲染，但是排序只能够解决部分问题，自遮挡、互相遮挡等问题。</p>
+<p><img src="oit-4.png" alt=""></p>
+<h3 id="顺序化"><a href="#顺序化" class="headerlink" title="顺序化"></a>顺序化</h3><p>为了解决这些问题，第一个思路就是尝试让渲染的mesh变得有序，一个比较2B的方法：所有存在交错的地方/自遮挡的边缘进行mesh拆分，拆解成为当前帧顺序上严格排序的mesh序列进行渲染。可以想象每帧里进行mesh拆分重组的开销有多大，所以说是2B方法。</p>
+<p>第二种“普通”方法，Nvidia提出的”depth peel”方法：<br>首先正常绘制模型，开启深度测试，获取最外层的Fragment颜色和深度。<br>第二次绘制模型使用第一次获取的深度信息做深度测试，获取次外层的Fragment颜色和深度。 </p>
+<p>重复步骤2，每次绘制用上一次获取的深度信息做深度测试，获得所有里层Fragment的颜色，最后从里向外透明混合所有层颜色获取最终颜色。<br>就像是剥洋葱一样，沿着镜头方向从近向远一层层的记录颜色和透明度，最后根据所有的层级再进行有序的OVER操作。可以看到拆成N个层级就需要N个全屏Pass，开销非常大。基于这个方案Nvidia进一步优化出Dual Depth Peeling，优化至需要只 (N/2+1) 个Pass来实现。</p>
+<h3 id="Blended-OIT"><a href="#Blended-OIT" class="headerlink" title="Blended OIT"></a>Blended OIT</h3><p>另一个思路是重新定义半透明合成（OVER）操作使其顺序可交换，叫做blended OIT，优点有：硬件通用性、性能开销低，同样能解决自遮挡、互遮挡等表面穿透问题。首个blended OIT方法由Meshkin提出：</p>
+<p><img src="oit-5.png" alt=""></p>
+<p>加权和的操作保证了合成算法的无序和质量，问题也很大，从公式中可以看出当 α 很小时，类似于覆盖操作。当 α 很大时，会变成祛除背景的其他层级颜色叠加，很可能会导致颜色空间偏移。</p>
+<p>Bavoil and Myers改进了这一方法，提出”weighted average”公式：</p>
+<p><img src="oit-6.png" alt=""></p>
+<p>和名字一样，对 α 进行加权平均，对于上文提到 α 很小或者很大的情况都进行了优化。一样拥有缺点，他们方法平均了所有表面的 α，代表着一个 $C=0 \alpha=0$ 的表面不应该被看到，但是在当前公式中却会拥有颜色。所以NVIDIA的两位作者在引用文章（Weighted Blended Order-Independent Transparency）扩展了公式：</p>
+<p><img src="oit-7.png" alt=""></p>
+<p>可以看到在新公式中，$C=0 \alpha=0$ 的透明层因为乘积的原因不再影响最终的呈现颜色。同时他们还提出了深度权重有助于提升遮挡的效果(Depth Weights Improve Occlusion)。回到上个公式中，组合部分的覆盖率最高（ α 最大）的表面主导最终颜色，不论他们深度与半透明顺序。也就是说，拥有近似 α 的多个颜色会平均贡献，不管他们的顺序如何。</p>
+<p>这和我们实际生活中的感知是不同的，比如天空中黑色的云朵前飘过一个白色的云朵，白色应该占主要色调；顺序换过来的话，黑色应该占主要色调。而不是相同的权重，为了达到这种效果，我们在公式中增加颜色与到相机的距离递减权重：</p>
+<p><img src="oit-8.png" alt=""></p>
+<p>其中 $w(z_i,\alpha_i)$ 就是距离权重，其中z是相机空间的距离数值，值域 $[0,-\infty)$ 。所以 $w(z_i,\alpha_i)$ 是一个关于 $|z|$ 在 $[0,-\infty)$ 区间单调递减的函数。</p>
+<p>权重函数就像每个表面的遮挡的估计器一样，允许一个表面通过假设它和观察者之间的其他表面的均匀分布来调节它自己的贡献。同时引入限制，GPU中计算需要再16位浮点数上进行，函数的选取要保证在有效范围内变化足够明显，所以使用多项式公式描述权重。</p>
+<p>同样不能让权重函数影响过大，加入 $\alpha=0$ 参数，作者推荐了几个通用的权重函数，在任意场景大深度下表现都不错，z在 $[0.1,500]$ 的区间基本能映射到16位浮点数精度。</p>
+<p><img src="oit-9.png" alt=""></p>
+<p>最后一个公式中， $d(z)$ 就是OPENGL中gl_FragCoord.z中的数值，也就是：</p>
+<p><img src="oit-10.png" alt=""></p>
+<p>每个公式都进行了值域裁剪，原因是在 $|z|$ 很小 α 很大或者 $|z|$ 很大 α<br>很小的情况下，会产生16位float值域溢出，导致效果错误。即便有了值域限制，在20多层半透明叠加后可能放大值域问题，仍然有可能溢出。下图是4种方法值域图表：</p>
+<p><img src="oit-11.png" alt=""></p>
+<p>在大部分场景下，这种深度加权的blended OIT方法非常接近使用排序的半透明混合方式，并且能够在半透明穿插的情况下得到良好的效果。</p>
+<p>对于粒子系统和头发系统，游戏引擎中一个场景会处理多个粒子、头发系统，单独进行提交draw call。可以在gpu上对于系统粗略的排序，在每个系统中使用本文的OIT方法进行渲染。</p>
+<h3 id="Blended-OIT限制"><a href="#Blended-OIT限制" class="headerlink" title="Blended OIT限制"></a>Blended OIT限制</h3><p>文章也提到该方法的使用限制，在下列情况下Blended OIT方法表现质量会受到影响：</p>
+<ol>
+<li>场景中深度范围很大，在单个pass中提交多个半透明紧密结合的群体；在这种情况下很难选择既能够区分单个集合，还能够在集合中区分半透明层的深度函数。 </li>
+<li>方法和深度相关，也就是半透明的mesh放在相机近处和远处颜色会有所差异，但这种差异一般是可以接受的。</li>
+</ol>
+<p>同时再回顾下本方法的隐含假设：</p>
+<ol>
+<li>部分覆盖/半透明叠加的位置与层级不相关，类似自遮挡、互相遮挡的情况； </li>
+<li>深度上尽可能分布均匀，或者颜色上尽可能接近； </li>
+<li>对于靠近的表面颜色精度最重要，在整个深度范围内精度都很重要。</li>
+</ol>
+<h3 id="Blended-OIT实现"><a href="#Blended-OIT实现" class="headerlink" title="Blended OIT实现"></a>Blended OIT实现</h3><p>说了算法原理，我们看看如何在渲染管线中实现，回到OVER操作上。在OPENGL中通过Blend来实现，在打开Blend的情况下，OpenGL以下面的方程进行混合：</p>
+<p><img src="oit-12.png" alt=""></p>
+<p>对比OVER操作：</p>
+<p><img src="oit-13.png" alt=""></p>
+<p>$C_0$ 对应 $C_dest$ 、 $C_1$ 对应 $\alpha C_{src}$，是预乘过的颜色值，设定因子为src乘以 α ，dest为乘以 $1-\alpha$ ，按顺序递归地执行OVER操作等价于opengl中多个半透明drawcall。可以看到，由于Blend操作可以指定因子和操作，公式中的多项颜色、透明度求和、求积都是利用Blend机制来实现的。对于Blended OIT方法，先来看第一版方法的实现，对应公式：</p>
+<p><img src="oit-14.png" alt=""></p>
+<p>OpenGL伪代码实现如下：</p>
+<p><img src="oit-15.png" alt=""></p>
+<p>Color和 α 的因子设定为1，将最终着色带入Blend函数，单次Blend公式变为：</p>
+<script type="math/tex; mode=display">
+C_f = C_1 - \alpha_1 * C_0 +  C_0</script><p>合并后：</p>
+<script type="math/tex; mode=display">
+C_f = C_1 + C_0(1 - \alpha_1)</script><p>多次叠加就得到我们的公式，通过这个公式的推导可以得到一个结论，α 的操作交给Blend Function，累加的系数放在shader中颜色部分。同样的对于最终版本的方法：</p>
+<p><img src="oit-16.png" alt=""></p>
+<p>实现如下：</p>
+<p><img src="oit-17.png" alt=""></p>
+<p>实现过程非常复杂，我先逐步拆解，首先是，除法该如何表示？本文拆分为两个PASS，第一个PASS输出分子和分母，对应framebuffer绑定了两个颜色输出（A-RBGA16F和B-R16F），公式拆分如下：</p>
+<ol>
+<li>分子部分对应gl_FragData[0].rgb，利用颜色混合函数GL_ONE、GL_ONE，组成公式部分 $\sum_{i=1}^nC_i * w(z_i, \alpha_i)$</li>
+<li>分母部分对应gl_FragData[1].r，利用颜色混合函数GL_ONE、GL_ONE，组成公式部分 $\sum_{i=1}^n\alpha_i * w(z_i, \alpha_i)$</li>
+<li>部分存在gl_FragData[0].a，利用透明度混合公式GL_ZERO、GL_ONE_MINUS_SRC_ALPHA，组成 $\prod_{i=1}^n(1-\alpha_i)$</li>
+</ol>
+<p>第二个PASS中除去排除数值范围限定的部分，主要目标就是将已有信息项组合成最终公式，将上面123环节的产出分别用XYZ代表并带入到公式中，得到：</p>
+<script type="math/tex; mode=display">
+C_f = X / Y \times (1-Z) + C_0 \times Z</script><p>看到这个公式就很容易理解了，把Z当做新的 α ，X/Y当做颜色，指定颜色Blend方法为GL_ONE_MINUS_SRC_ALPHA、GL_SRC_ALPHA进行一遍全屏绘制就可以了。</p>
+<h3 id="Demo"><a href="#Demo" class="headerlink" title="Demo"></a>Demo</h3><p><img src="oit-18.gif" alt=""></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>整理下全文的思路：</p>
+<ol>
+<li>现代半透明渲染是基于OVER操作符进行的-&gt;</li>
+<li>OVER操作符不符合交换律，要求顺序-&gt;</li>
+<li>排序只能解决一部分半透明问题-&gt;</li>
+<li>引出Blended OIT算法，通过变种混合公式，使其顺序无关-&gt;</li>
+<li>早期方法未考虑权重与边界条件-&gt;</li>
+<li>引出本文介绍算法，既解决大部分边界条件，同时提出深度权重提升效果-&gt;</li>
+<li>分析公式在Shader中的实现方案，巧妙利用两个PASS完成计算。</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+        
+          <li><a href="/">Home</a></li>
+        
+          <li><a href="/about/">About</a></li>
+        
+          <li><a href="/archives/">Writing</a></li>
+        
+          <li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li>
+        
+      </ul>
+    </div>
+
+    
+    
+      <div id="toc-footer" style="display: none">
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%83%8C%E6%99%AF"><span class="toc-number">1.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%8A%E9%80%8F%E6%98%8E%E6%97%A0%E5%BA%8F%E6%B8%B2%E6%9F%93Order-Independent-Transparency"><span class="toc-number">2.</span> <span class="toc-text">半透明无序渲染Order-Independent Transparency</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A1%BA%E5%BA%8F%E5%8C%96"><span class="toc-number">2.1.</span> <span class="toc-text">顺序化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Blended-OIT"><span class="toc-number">2.2.</span> <span class="toc-text">Blended OIT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Blended-OIT%E9%99%90%E5%88%B6"><span class="toc-number">2.3.</span> <span class="toc-text">Blended OIT限制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Blended-OIT%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.4.</span> <span class="toc-text">Blended OIT实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Demo"><span class="toc-number">2.5.</span> <span class="toc-text">Demo</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">3.</span> <span class="toc-text">总结</span></a></li></ol>
+      </div>
+    
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://example.com/2024/09/02/oit/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://example.com/2024/09/02/oit/&text=半透明顺序无关渲染-OIT"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://example.com/2024/09/02/oit/&is_video=false&description=半透明顺序无关渲染-OIT"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=半透明顺序无关渲染-OIT&body=Check out this article: http://example.com/2024/09/02/oit/"><i class="fa-solid fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://example.com/2024/09/02/oit/&title=半透明顺序无关渲染-OIT"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://example.com/2024/09/02/oit/&name=半透明顺序无关渲染-OIT&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://example.com/2024/09/02/oit/&t=半透明顺序无关渲染-OIT"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fa-solid fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        
+          <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fa-solid fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fa-solid fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa-solid fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2016-2024
+    Yan Zhang
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">Home</a></li><!--
+     --><!--
+       --><li><a href="/about/">About</a></li><!--
+     --><!--
+       --><li><a href="/archives/">Writing</a></li><!--
+     --><!--
+       --><li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script>
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script>
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="fa-regular fa-clone"></i>';
+    btn += '</span>';
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+</body>
+</html>
