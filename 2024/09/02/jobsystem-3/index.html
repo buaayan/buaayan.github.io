@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Job System 2.0: Lock-Free Work Stealing – Part 3: Going lock-free本文翻译自1部分模块添加自己的理解，有兴趣的同学建议阅读原文。将探索job system的核心问题：实现一个无锁实现的任务偷取队列。 回顾记住任务偷取队列需要提供的三个操作：  Push(): 在队列私有端添加job(LIFO) Pop(): 在队列的私有端移除job(">
+<meta property="og:type" content="article">
+<meta property="og:title" content="手把手完成JobSystem-Part3无锁队列">
+<meta property="og:url" content="http://example.com/2024/09/02/jobsystem-3/index.html">
+<meta property="og:site_name" content="Against the light">
+<meta property="og:description" content="Job System 2.0: Lock-Free Work Stealing – Part 3: Going lock-free本文翻译自1部分模块添加自己的理解，有兴趣的同学建议阅读原文。将探索job system的核心问题：实现一个无锁实现的任务偷取队列。 回顾记住任务偷取队列需要提供的三个操作：  Push(): 在队列私有端添加job(LIFO) Pop(): 在队列的私有端移除job(">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2024-09-02T12:01:33.000Z">
+<meta property="article:modified_time" content="2024-09-02T12:11:29.164Z">
+<meta property="article:author" content="Yan Zhang">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/favicon.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/favicon-192x192.png" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+        
+      
+    
+    <!-- title -->
+    <title>手把手完成JobSystem-Part3无锁队列</title>
+    <!-- async scripts -->
+    <!-- Google Analytics -->
+
+
+    <!-- Umami Analytics -->
+
+
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 7.3.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="Menu"><i class="fa-solid fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="Menu"><i class="fa-solid fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="Top" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fa-solid fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">Home</a></li><!--
+     --><!--
+       --><li><a href="/about/">About</a></li><!--
+     --><!--
+       --><li><a href="/archives/">Writing</a></li><!--
+     --><!--
+       --><li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="Next post" href="/2024/09/02/jobsystem-2/"><i class="fa-solid fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="Back to top" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa-solid fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="Share post" href="#"><i class="fa-solid fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://example.com/2024/09/02/jobsystem-3/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://example.com/2024/09/02/jobsystem-3/&text=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://example.com/2024/09/02/jobsystem-3/&is_video=false&description=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=手把手完成JobSystem-Part3无锁队列&body=Check out this article: http://example.com/2024/09/02/jobsystem-3/"><i class="fa-solid fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://example.com/2024/09/02/jobsystem-3/&name=手把手完成JobSystem-Part3无锁队列&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://example.com/2024/09/02/jobsystem-3/&t=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    
+    
+      <div id="toc">
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Job-System-2-0-Lock-Free-Work-Stealing-%E2%80%93-Part-3-Going-lock-free"><span class="toc-number">1.</span> <span class="toc-text">Job System 2.0: Lock-Free Work Stealing – Part 3: Going lock-free</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9E%E9%A1%BE"><span class="toc-number">2.</span> <span class="toc-text">回顾</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%A6%E9%94%81%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%89%88%E6%9C%AC"><span class="toc-number">3.</span> <span class="toc-text">带锁的实现版本</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BF%85%E8%A6%81%E7%9F%A5%E8%AF%86%EF%BC%9A%E6%97%A0%E9%94%81%E7%BC%96%E7%A8%8B"><span class="toc-number">4.</span> <span class="toc-text">必要知识：无锁编程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B7%BB%E5%8A%A0%E7%BC%96%E8%AF%91%E5%92%8C%E5%86%85%E5%AD%98%E9%9A%94%E7%A6%BB"><span class="toc-number">5.</span> <span class="toc-text">添加编译和内存隔离</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">6.</span> <span class="toc-text">参考</span></a></li></ol>
+      </div>
+    
+  </span>
+</div>
+
+    
+    <div class="content index py4 ">
+        
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle p-name" itemprop="name headline">
+        手把手完成JobSystem-Part3无锁队列
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author p-author h-card" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span class="p-name" itemprop="name">Yan Zhang</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-09-02T12:01:33.000Z" class="dt-published" itemprop="datePublished">2024-09-02</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content e-content" itemprop="articleBody">
+    <h2 id="Job-System-2-0-Lock-Free-Work-Stealing-–-Part-3-Going-lock-free"><a href="#Job-System-2-0-Lock-Free-Work-Stealing-–-Part-3-Going-lock-free" class="headerlink" title="Job System 2.0: Lock-Free Work Stealing – Part 3: Going lock-free"></a>Job System 2.0: Lock-Free Work Stealing – Part 3: Going lock-free</h2><p>本文翻译自1部分模块添加自己的理解，有兴趣的同学建议阅读原文。将探索job system的核心问题：实现一个无锁实现的任务偷取队列。</p>
+<h2 id="回顾"><a href="#回顾" class="headerlink" title="回顾"></a>回顾</h2><p>记住任务偷取队列需要提供的三个操作：</p>
+<ul>
+<li>Push(): 在队列私有端添加job(LIFO)</li>
+<li>Pop(): 在队列的私有端移除job(LIFO)</li>
+<li>Steal(): 从队列公有端偷取job(FIFO)</li>
+</ul>
+<p>进一步需要记住Push()和Pop()只能在拥有线程调用不会出现并行问题。Steal()可以被其他线程调用，在任意时间点，都可能和Push()和Pop()并行调用。</p>
+<h2 id="带锁的实现版本"><a href="#带锁的实现版本" class="headerlink" title="带锁的实现版本"></a>带锁的实现版本</h2><p>在探索无锁编程之前，我们先用常规锁实现一版。从概念上明确如何构造一个双端队列，一端表现为LIFO，另一端表现为FIFO。</p>
+<p>我们可以通过维护两套序号来解决这个问题，如果我们假设有无限内存，创建两个计数器（bottom和top）：</p>
+<ul>
+<li>bottom表示下一个job将会push到数组中下一个序号位置内，Push操作首先储存job，然后自增bottom。</li>
+<li>类似的，Pop会自减bottom，然后返回所在数组位置的job。</li>
+<li>top定义了下一个可以被偷取的元素（也就是说最顶端），Steal()接口调用后，会从当前位置获取一个job，并且自增top。</li>
+</ul>
+<p>可以看出，在任何时间点，bottom-top的数值都是当前在双向队列中的工作数，如果bottom&gt;=top，队列中是空的，没有可供偷取的job。另一方面，Push和Pop只更改bottom，Steal只更改top，这一点非常重要，最小化窃取工作的同步开销，并且非常有利于无锁实现。</p>
+<p>为了更好的展示双向队列如何工作，下表展示不同操作在队列上的表现：<br>| 操作 | bottom | top | size(bottom-top) |<br>| —— | —— | —— | —— |<br>| Empty | 0 | 0 | 0 |<br>| Push | 1 | 0 | 1 |<br>| Push | 2 | 0 | 2 |<br>| Push | 3 | 0 | 3 |<br>| Steal | 3 | 1 | 2 |<br>| Pop | 2 | 1 | 1 |<br>| Pop | 1 | 1 | 0 |</p>
+<p>如前文所说，Push()和Pop()以LIFO方式工作，Steal()以FIFO方式工作。在上述例子中，Steal()返回的是序号0的job，Pop()依次返回的是序号2和序号1的job。三种操作示例代码如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line">void Push(Job* job)</span><br><span class="line">&#123;</span><br><span class="line">    ScopedLock lock(criticalSection);</span><br><span class="line"></span><br><span class="line">    m_jobs[m_bottom] = job;</span><br><span class="line">    ++m_bottom;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">Job* Pop(void)</span><br><span class="line">&#123;</span><br><span class="line">    ScopedLock lock(criticalSection);</span><br><span class="line"></span><br><span class="line">    const int jobCount = m_bottom - m_top;</span><br><span class="line">    if (jobCount &lt;= 0)</span><br><span class="line">    &#123;</span><br><span class="line">        // no job left in the queue</span><br><span class="line">        return nullptr;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    --m_bottom;</span><br><span class="line">    return m_jobs[m_bottom];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">Job* Steal(void)</span><br><span class="line">&#123;</span><br><span class="line">    ScopedLock lock(criticalSection);</span><br><span class="line"></span><br><span class="line">    const int jobCount = m_bottom - m_top;</span><br><span class="line">    if (jobCount &lt;= 0)</span><br><span class="line">    &#123;</span><br><span class="line">        // no job there to steal</span><br><span class="line">        return nullptr;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Job* job = m_jobs[m_top];</span><br><span class="line">    ++m_top;</span><br><span class="line">    return job;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>现在需要把无限制的计数器加上边界，使其变成循环数组。通过对bottom和top取模操作实现。但这样job数量会不好计算，需要考虑到取模的情况，更好的方案是在访问数组时在bottom和top上应用取模操作。只要数组数长度数量是2的次方，只是多了一次按位与操作。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line">static const unsigned int UNMBER_OF_JOBS = 4096u;</span><br><span class="line">static const unsigned int MASK = UNMBER_OF_JOBS - 1u;</span><br><span class="line"></span><br><span class="line">void Push(Job* job)</span><br><span class="line">&#123;</span><br><span class="line">    ScopedLock lock(criticalSection);</span><br><span class="line"></span><br><span class="line">    m_jobs[m_bottom &amp; MASK] = job;</span><br><span class="line">    ++m_bottom;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">Job* Pop(void)</span><br><span class="line">&#123;</span><br><span class="line">    ScopedLock lock(criticalSection);</span><br><span class="line"></span><br><span class="line">    const int jobCount = m_bottom - m_top;</span><br><span class="line">    if (jobCount &lt;= 0)</span><br><span class="line">    &#123;</span><br><span class="line">        // no job left in the queue</span><br><span class="line">        return nullptr;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    --m_bottom;</span><br><span class="line">    return m_jobs[m_bottom &amp; MASK];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">Job* Steal(void)</span><br><span class="line">&#123;</span><br><span class="line">    ScopedLock lock(criticalSection);</span><br><span class="line"></span><br><span class="line">    const int jobCount = m_bottom - m_top;</span><br><span class="line">    if (jobCount &lt;= 0)</span><br><span class="line">    &#123;</span><br><span class="line">        // no job there to steal</span><br><span class="line">        return nullptr;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Job* job = m_jobs[m_top &amp; MASK];</span><br><span class="line">    ++m_top;</span><br><span class="line">    return job;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>目前为止，我们实现了一个使用传统锁的工作偷取队列。</p>
+<h2 id="必要知识：无锁编程"><a href="#必要知识：无锁编程" class="headerlink" title="必要知识：无锁编程"></a>必要知识：无锁编程</h2><p>无锁编程是一个巨大的课题，已经有很多文章介绍。从中提取出几篇质量较高的文章，推荐在下一章节开发前阅读：</p>
+<ul>
+<li>无锁编程简介3: 课程包含原子操作、顺序一致性和内存顺序，“无锁编程101”必读课程。</li>
+<li>编译时内存顺序4: 介绍编译器重排序和内存界限。</li>
+<li>实践中的内存重排序5: 介绍在x86/64下发生内存重排序的粒子，即使是intel x86/64架构提供强内存模型。</li>
+<li>Weak vs. Strong Memory Models5: 讨论强和弱内存模型，以及连续一致性。</li>
+<li>Jeff Preshing的blgo是无锁编程的金框，如果有所疑问，查查他的blog。<br>无锁工作偷取队列</li>
+</ul>
+<p>假设没有编译器重排序，绝对没有内存重排序的问题。实现一版队列函数：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">void Push(Job* job)</span><br><span class="line">&#123;</span><br><span class="line">    long b = m_bottom;</span><br><span class="line">    m_jobs[b &amp; MASK] = job;</span><br><span class="line">    m_bottom = b+1;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>当其他操作并行发生时会出现什么问题？Pop()无法并行调用，我们只需考虑Steal(),Steal()只写入top读取bottom。所以可能出错的情况是：Push()过程中（在#5行m_bottom自增之前）调用Steal()，认为队列为空。不用担心这件事情，因为只会造成调用Steal()偷取不到工作，不会实质性的伤害。</p>
+<p>Steal()实现变为：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">Job* Steal(void)</span><br><span class="line">&#123;</span><br><span class="line">    long t = m_top;</span><br><span class="line">    long b = m_bottom;</span><br><span class="line">    if (t &lt; b)</span><br><span class="line">    &#123;</span><br><span class="line">        // non-empty queue</span><br><span class="line">        Job* job = m_jobs[t &amp; MASK];</span><br><span class="line"></span><br><span class="line">        if (_InterlockedCompareExchange(&amp;m_top, t+1, t) != t)</span><br><span class="line">        &#123;</span><br><span class="line">            // a concurrent steal or pop operation removed an element from the deque in the meantime.</span><br><span class="line">            return nullptr;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        return job;</span><br><span class="line">    &#125;</span><br><span class="line">    else</span><br><span class="line">    &#123;</span><br><span class="line">        // empty queue</span><br><span class="line">        return nullptr;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>只要top &lt; bottom，表明队列中仍然有job可以获取。如果队列不为空，这个函数首先获取数组中的job，然后使用compare-and-swap6操作自增top。如果CAS失败，Steal()成功从队列中获取一个job。</p>
+<p>需要注意：必须在CAS操作之前读取job，因为数组中的位置可能被在CAS操作之后并行调用的Push() 改写。</p>
+<p>必须要确保top读取在bottom读取之前，保证数值与当前内存的一致性。现在仍然有可能会发生数据竞争：在bottom读取出来后CAS调用之前，如果此时调用Pop()导致队列变为空队列，那么返回的job会有问题。我们需要保Pop()和Steal()不会同时返回队列中的最后一个job，下面在Pop()中通过CAS更改top:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">Job* Pop(void)</span><br><span class="line">&#123;</span><br><span class="line">    long b = m_bottom - 1;</span><br><span class="line">    m_bottom = b;</span><br><span class="line"></span><br><span class="line">    long t = m_top;</span><br><span class="line">    if (t &lt;= b)</span><br><span class="line">    &#123;</span><br><span class="line">        // non-empty queue</span><br><span class="line">        Job* job = m_jobs[b &amp; MASK];</span><br><span class="line">        if (t != b)</span><br><span class="line">        &#123;</span><br><span class="line">            // there&#x27;s still more than one item left in the queue</span><br><span class="line">            return job;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        // this is the last item in the queue</span><br><span class="line">        if (_InterlockedCompareExchange(&amp;m_top, t+1, t) != t)</span><br><span class="line">        &#123;</span><br><span class="line">            // failed race against steal operation</span><br><span class="line">            job = nullptr;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        m_bottom = t+1;</span><br><span class="line">        return job;</span><br><span class="line">    &#125;</span><br><span class="line">    else</span><br><span class="line">    &#123;</span><br><span class="line">        // deque was already empty</span><br><span class="line">        m_bottom = t;</span><br><span class="line">        return nullptr;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>和Steal()中对比，这里必须确保bottom自增在读取top之前，否则，Steal()能够在Pop()不感知的情况下偷走job。另外，如果队列空了我们必须显式指定bottom = top。</p>
+<p>如上讨论，只要队列中还有job，我们可以我们直接返回而无需进行多余的原子操作。只是在最后一个job时候需要考虑Steal()的并行问题。</p>
+<p>上述代码使用CAS操作增加top并且检查赢得或者失去一次和Steal()的竞争，可能出现两个结果：</p>
+<ul>
+<li>获得CAS竞争（对比Steal()），设定bottom = t + 1，设定队列为空的状态。</li>
+<li>输掉CAS竞争（对比Steal()）,返回一个空job，仍然设定bottom = t + 1，因为输给Steal()会把top设定为t + 1,所以我们依然需要将队列置成空状态。</li>
+</ul>
+<h2 id="添加编译和内存隔离"><a href="#添加编译和内存隔离" class="headerlink" title="添加编译和内存隔离"></a>添加编译和内存隔离</h2><p>迄今为止，上述代码不能按照我们的预期执行，因为没有考虑编译和内存隔离问题，这一点需要被修复。</p>
+<p>再看下Push()的实现：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">void Push(Job* job)</span><br><span class="line">&#123;</span><br><span class="line">    long b = m_bottom;</span><br><span class="line">    m_jobs[b &amp; MASK] = job;</span><br><span class="line">    m_bottom = b+1;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>没人能保证编译器不会重新排序上述代码指令，尤其是，我们无法保证在队列中存储早与自增bottom（其他线程关注的变量），如果其他线程偷取了实际还没有存入队列的job。我们需要添加编译隔离：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">void Push(Job* job)</span><br><span class="line">&#123;</span><br><span class="line">    long b = m_bottom;</span><br><span class="line">    m_jobs[b &amp; MASK] = job;</span><br><span class="line"></span><br><span class="line">    // ensure the job is written before b+1 is published to other threads.</span><br><span class="line">    // on x86/64, a compiler barrier is enough.</span><br><span class="line">    COMPILER_BARRIER;</span><br><span class="line"></span><br><span class="line">    m_bottom = b+1;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因为强内存顺序下，不允许存储指令被重排序到另一个存储之前，所以x86/64下仅编译隔离是够用的。在其他平台上（PowerPC,ARM,…），需要使用memory fence。更进一步来讲，存储操作并不需要保证原子性，因为另一个对bottom进行操作的是Pop()，不可能并行调用。</p>
+<p>相似的，我们同样需要在Steal()中实现编译隔离：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">Job* Steal(void)</span><br><span class="line">&#123;</span><br><span class="line">    long t = m_top;</span><br><span class="line"></span><br><span class="line">    // ensure that top is always read before bottom.</span><br><span class="line">    // loads will not be reordered with other loads on x86, so a compiler barrier is enough.</span><br><span class="line">    COMPILER_BARRIER;</span><br><span class="line"></span><br><span class="line">    long b = m_bottom;</span><br><span class="line">    if (t &lt; b)</span><br><span class="line">    &#123;</span><br><span class="line">        // non-empty queue</span><br><span class="line">        Job* job = m_jobs[t &amp; MASK];</span><br><span class="line"></span><br><span class="line">        // the interlocked function serves as a compiler barrier, and guarantees that the read happens before the CAS.</span><br><span class="line">        if (_InterlockedCompareExchange(&amp;m_top, t+1, t) != t)</span><br><span class="line">        &#123;</span><br><span class="line">            // a concurrent steal or pop operation removed an element from the deque in the meantime.</span><br><span class="line">            return nullptr;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        return job;</span><br><span class="line">    &#125;</span><br><span class="line">    else</span><br><span class="line">    &#123;</span><br><span class="line">        // empty queue</span><br><span class="line">        return nullptr;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里我们需要一个编译隔离来保证top的读取实际发生在bottom之前。另外，我们需要另一个隔离来保证在CAS执行之前工作从数组中取出。这个情况下，CAS操作同时也作为一个内存隔离。</p>
+<p>Pop()改造：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">Job* Pop(void)</span><br><span class="line">&#123;</span><br><span class="line">    long b = m_bottom - 1;</span><br><span class="line">    m_bottom = b;</span><br><span class="line"></span><br><span class="line">    long t = m_top;</span><br><span class="line">    if (t &lt;= b)</span><br><span class="line">    &#123;</span><br><span class="line">        // non-empty queue</span><br><span class="line">        Job* job = m_jobs[b &amp; MASK];</span><br><span class="line">        if (t != b)</span><br><span class="line">        &#123;</span><br><span class="line">            // there&#x27;s still more than one item left in the queue</span><br><span class="line">            return job;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        // this is the last item in the queue</span><br><span class="line">        if (_InterlockedCompareExchange(&amp;m_top, t+1, t) != t)</span><br><span class="line">        &#123;</span><br><span class="line">            // failed race against steal operation</span><br><span class="line">            job = nullptr;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        m_bottom = t+1;</span><br><span class="line">        return job;</span><br><span class="line">    &#125;</span><br><span class="line">    else</span><br><span class="line">    &#123;</span><br><span class="line">        // deque was already empty</span><br><span class="line">        m_bottom = t;</span><br><span class="line">        return nullptr;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>最重要的实现是头三行代码，这是一个真正需要内存隔离的地方，即便是在x86/64架构上。这三行代码里，存储操作bottom = b和读取操作long t = top之间添加内存隔离并不足够，因为内存模型明确允许这种情况：读取和其他位置的写入允许被重排序。头几行代码变为：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">long b = m_bottom - 1;</span><br><span class="line">m_bottom = b;</span><br><span class="line"></span><br><span class="line">MEMORY_BARRIER;</span><br><span class="line"></span><br><span class="line">long t = m_top;</span><br></pre></td></tr></table></figure>
+<p>SFENCE和LFENCE7在这种情况下都不满足，需要一个MFENCE隔离。我们可以取代锁，使用内在带锁操作（例如XCHG），在这种情况下性能更好：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">long b = m_bottom - 1;</span><br><span class="line">_InterlockedExchange(&amp;m_bottom, b);</span><br><span class="line"></span><br><span class="line">long t = m_top;</span><br></pre></td></tr></table></figure>
+<p>剩下Pop()可以保持不变，类似于Steal()，CAS操作作为一个编译器隔离，bottom = t + 1并不需要原子操作，因为bottom并不会出现并行操作。</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>性能</th>
+<th>基本</th>
+<th>线程独占</th>
+<th>无锁队列</th>
+<th>第一版对比提升</th>
+<th>第二版对比提升</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单任务</td>
+<td>9.9ms</td>
+<td>2.93ms</td>
+<td>6.31x</td>
+<td>3.38x</td>
+</tr>
+<tr>
+<td>并行任务</td>
+<td>5.3ms</td>
+<td>0.76ms</td>
+<td>6.97x</td>
+<td>1.78x</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>对比第一版实现，无锁版本和线程独占带来了7倍左右的收益，对比线程独占版本，我们依然提速了1.8x和3.3x版本。</p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p>[1] <a target="_blank" rel="noopener" href="https://blog.molecular-matters.com/2015/09/25/job-system-2-0-lock-free-work-stealing-part-3-going-lock-free/">https://blog.molecular-matters.com/2015/09/25/job-system-2-0-lock-free-work-stealing-part-3-going-lock-free/</a></p>
+<p>[2] <a target="_blank" rel="noopener" href="http://neteril.org/~jeremie/Dynamic_Circular_Work_Queue.pdf">http://neteril.org/~jeremie/Dynamic_Circular_Work_Queue.pdf</a></p>
+<p>[3] <a target="_blank" rel="noopener" href="http://preshing.com/20120612/an-introduction-to-lock-free-programming/">http://preshing.com/20120612/an-introduction-to-lock-free-programming/</a></p>
+<p>[4]<a target="_blank" rel="noopener" href="http://preshing.com/20120625/memory-ordering-at-compile-time/">http://preshing.com/20120625/memory-ordering-at-compile-time/</a></p>
+<p>[5]<a target="_blank" rel="noopener" href="https://preshing.com/20120515/memory-reordering-caught-in-the-act/">https://preshing.com/20120515/memory-reordering-caught-in-the-act/</a></p>
+<p>[6]<a target="_blank" rel="noopener" href="https://docs.microsoft.com/zh-cn/windows/win32/api/winnt/nf-winnt-interlockedcompareexchange?redirectedfrom=MSDN">https://docs.microsoft.com/zh-cn/windows/win32/api/winnt/nf-winnt-interlockedcompareexchange?redirectedfrom=MSDN</a></p>
+<p>[7]<a target="_blank" rel="noopener" href="https://blog.csdn.net/admiral_j/article/details/8072855">https://blog.csdn.net/admiral_j/article/details/8072855</a></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+        
+          <li><a href="/">Home</a></li>
+        
+          <li><a href="/about/">About</a></li>
+        
+          <li><a href="/archives/">Writing</a></li>
+        
+          <li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li>
+        
+      </ul>
+    </div>
+
+    
+    
+      <div id="toc-footer" style="display: none">
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Job-System-2-0-Lock-Free-Work-Stealing-%E2%80%93-Part-3-Going-lock-free"><span class="toc-number">1.</span> <span class="toc-text">Job System 2.0: Lock-Free Work Stealing – Part 3: Going lock-free</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9E%E9%A1%BE"><span class="toc-number">2.</span> <span class="toc-text">回顾</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%A6%E9%94%81%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%89%88%E6%9C%AC"><span class="toc-number">3.</span> <span class="toc-text">带锁的实现版本</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BF%85%E8%A6%81%E7%9F%A5%E8%AF%86%EF%BC%9A%E6%97%A0%E9%94%81%E7%BC%96%E7%A8%8B"><span class="toc-number">4.</span> <span class="toc-text">必要知识：无锁编程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B7%BB%E5%8A%A0%E7%BC%96%E8%AF%91%E5%92%8C%E5%86%85%E5%AD%98%E9%9A%94%E7%A6%BB"><span class="toc-number">5.</span> <span class="toc-text">添加编译和内存隔离</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">6.</span> <span class="toc-text">参考</span></a></li></ol>
+      </div>
+    
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://example.com/2024/09/02/jobsystem-3/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://example.com/2024/09/02/jobsystem-3/&text=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://example.com/2024/09/02/jobsystem-3/&is_video=false&description=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=手把手完成JobSystem-Part3无锁队列&body=Check out this article: http://example.com/2024/09/02/jobsystem-3/"><i class="fa-solid fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://example.com/2024/09/02/jobsystem-3/&title=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://example.com/2024/09/02/jobsystem-3/&name=手把手完成JobSystem-Part3无锁队列&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://example.com/2024/09/02/jobsystem-3/&t=手把手完成JobSystem-Part3无锁队列"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fa-solid fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        
+          <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fa-solid fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fa-solid fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa-solid fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2016-2024
+    Yan Zhang
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">Home</a></li><!--
+     --><!--
+       --><li><a href="/about/">About</a></li><!--
+     --><!--
+       --><li><a href="/archives/">Writing</a></li><!--
+     --><!--
+       --><li><a target="_blank" rel="noopener" href="http://github.com/probberechts">Projects</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script>
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script>
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="fa-regular fa-clone"></i>';
+    btn += '</span>';
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+</body>
+</html>
